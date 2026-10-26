@@ -1,4 +1,4 @@
-name: Build Native Standalone APK
+name: Build Standalone APK (Repackage)
 
 on:
   workflow_dispatch:
@@ -8,29 +8,46 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Descargar código base
+      - name: Descargar tus archivos
         uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
-      - name: Configurar Java 17
+      - name: Configurar Java
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Instalar librerías C++ de Android
-        run: sudo apt-get update && sudo apt-get install -y ninja-build
-
-      - name: Compilar juego independiente
+      - name: Preparar herramientas y APK Base
         run: |
-          cd builds/android
-          chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+          wget https://bitbucket.org/iBotPeaches/apktool/downloads/apktool_2.9.3.jar -O apktool.jar
+          wget https://github.com/patrickfav/uber-apk-signer/releases/download/v1.3.0/uber-apk-signer-1.3.0.jar -O signer.jar
+          wget "https://f-droid.org/repo/org.easyrpg.player_6699.apk" -O base.apk
+
+      - name: Inyectar juego y modificar Manifiesto
+        run: |
+          # 1. Desempaquetar
+          java -jar apktool.jar d base.apk -o decoded
           
-      - name: Subir tu juego listo
+          # 2. Inyectar archivos (asegurando que RPG_RT quede en la raíz de assets)
+          GAME_DIR=$(dirname $(find . -name "RPG_RT.ldb" | head -n 1))
+          mkdir -p decoded/assets
+          cp -r "$GAME_DIR"/* decoded/assets/
+          
+          # 3. Cambiar nombre de la aplicación
+          find decoded/res -name "strings.xml" -exec sed -i 's/>EasyRPG Player</>Mikoto Nikki</g' {} +
+          
+          # 4. Hackear el arranque: Forzar PlayerActivity en lugar de GameBrowserActivity
+          sed -i 's/org.easyrpg.player.game_browser.GameBrowserActivity/org.easyrpg.player.TEMP/g' decoded/AndroidManifest.xml
+          sed -i 's/org.easyrpg.player.player.PlayerActivity/org.easyrpg.player.game_browser.GameBrowserActivity/g' decoded/AndroidManifest.xml
+          sed -i 's/org.easyrpg.player.TEMP/org.easyrpg.player.player.PlayerActivity/g' decoded/AndroidManifest.xml
+          
+          # 5. Sellar y firmar el APK
+          java -jar apktool.jar b decoded -o unsigned.apk
+          java -jar signer.jar -a unsigned.apk -o final_apk
+
+      - name: Subir el juego final
         uses: actions/upload-artifact@v4
         with:
           name: Mikoto-Nikki-Standalone
-          path: builds/android/app/build/outputs/apk/debug/*.apk
+          path: final_apk/*.apk
           
