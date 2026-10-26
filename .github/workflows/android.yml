@@ -21,16 +21,22 @@ jobs:
         run: |
           wget https://bitbucket.org/iBotPeaches/apktool/downloads/apktool_2.9.3.jar -O apktool.jar
           wget https://github.com/patrickfav/uber-apk-signer/releases/download/v1.3.0/uber-apk-signer-1.3.0.jar -O signer.jar
-          
-          echo "Descargando base directamente de F-Droid..."
-          # Reemplaza la URL de abajo con el enlace que copiaste si es distinto
           wget "https://f-droid.org/repo/org.easyrpg.player_6699.apk" -O base.apk
 
-      - name: Inyectar el juego en el APK
+      - name: Inyectar el juego y cambiar nombre
         run: |
+          # Desempaquetar el APK
           java -jar apktool.jar d base.apk -o decoded
+          
+          # Buscar automáticamente dónde guardaste los archivos y moverlos a assets
+          GAME_DIR=$(dirname $(find . -name "RPG_RT.ldb" | head -n 1))
           mkdir -p decoded/assets
-          cp -r builds/android/app/src/main/assets/* decoded/assets/
+          cp -r "$GAME_DIR"/* decoded/assets/
+          
+          # Renombrar la app a Mikoto Nikki en todos los idiomas internos
+          find decoded/res -name "strings.xml" -exec sed -i 's/>EasyRPG Player</>Mikoto Nikki</g' {} +
+          
+          # Sellar el APK final
           java -jar apktool.jar b decoded -o unsigned.apk
           java -jar signer.jar -a unsigned.apk -o final_apk
 
