@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build Android APK (Repackage)
 
 on:
   workflow_dispatch:
@@ -8,30 +8,32 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Descargar el código
+      - name: Descargar tus archivos
         uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
-      - name: Configurar Java 17
+      - name: Configurar Java
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Dar permisos a Gradle
+      - name: Preparar herramientas
         run: |
-          cd builds/android
-          chmod +x gradlew
+          wget https://bitbucket.org/iBotPeaches/apktool/downloads/apktool_2.9.3.jar -O apktool.jar
+          wget https://github.com/patrickfav/uber-apk-signer/releases/download/v1.3.0/uber-apk-signer-1.3.0.jar -O signer.jar
+          curl -s https://api.github.com/repos/EasyRPG/Player/releases/latest | grep browser_download_url | grep -i "\.apk" | head -n 1 | cut -d '"' -f 4 | xargs wget -O base.apk
 
-      - name: Compilar el APK
+      - name: Inyectar el juego en el APK
         run: |
-          cd builds/android
-          ./gradlew assembleDebug
+          java -jar apktool.jar d base.apk -o decoded
+          mkdir -p decoded/assets
+          cp -r builds/android/app/src/main/assets/* decoded/assets/
+          java -jar apktool.jar b decoded -o unsigned.apk
+          java -jar signer.jar -a unsigned.apk -o final_apk
 
-      - name: Subir el APK generado
+      - name: Subir tu juego listo
         uses: actions/upload-artifact@v4
         with:
           name: Mikoto-Nikki-APK
-          path: builds/android/app/build/outputs/apk/debug/*.apk
+          path: final_apk/*.apk
           
