@@ -19,20 +19,31 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Configurar Android SDK y NDK
-        uses: android-actions/setup-android@v3
-        
-      - name: Instalar dependencias de compilación
-        run: sudo apt-get update && sudo apt-get install -y ninja-build cmake
+      - name: Instalar Ninja 
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
 
       - name: Compilar APK Independiente
+        id: compile
         run: |
           cd builds/android
           chmod +x gradlew
-          # Ejecutar Gradle asegurando que use la estructura de assets para standalone
-          ./gradlew assembleDebug --info
+          ./gradlew assembleDebug --stacktrace --info > build_log.txt 2>&1
 
-      - name: Subir tu juego listo
+      - name: Extraer error exacto (si falla)
+        if: failure()
+        run: |
+          echo "==== DETALLE DEL ERROR DE COMPILACIÓN ===="
+          tail -n 100 builds/android/build_log.txt
+          
+      - name: Subir registro de error (si falla)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ERROR-LOG
+          path: builds/android/build_log.txt
+
+      - name: Subir tu APK listo (si tuvo éxito)
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: Mikoto-Nikki-Standalone
