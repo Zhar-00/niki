@@ -1,4 +1,4 @@
-name: Build Native Standalone APK
+name: Build Standalone APK (Zip Injection)
 
 on:
   workflow_dispatch:
@@ -8,29 +8,48 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Descargar código base
+      - name: Descargar tus archivos
         uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
-      - name: Configurar Java 17
-        uses: actions/setup-java@v5 # <-- Actualizado para evitar bloqueos
+      - name: Configurar Java
+        uses: actions/setup-java@v5
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Instalar Ninja 
-        run: sudo apt-get update && sudo apt-get install -y ninja-build
-
-      - name: Compilar APK Independiente
+      - name: Preparar herramientas
         run: |
-          cd builds/android
-          chmod +x gradlew
-          # Ejecutar con bandera --no-build-cache para forzar descargas limpias
-          ./gradlew assembleDebug --no-build-cache --stacktrace --info
+          sudo apt-get update && sudo apt-get install -y zip
+          wget https://bitbucket.org/iBotPeaches/apktool/downloads/apktool_2.9.3.jar -O apktool.jar
+          wget https://github.com/patrickfav/uber-apk-signer/releases/download/v1.3.0/uber-apk-signer-1.3.0.jar -O signer.jar
+          wget "https://f-droid.org/repo/org.easyrpg.player_6699.apk" -O base.apk
+
+      - name: Renombrar e inyectar sin compresión
+        run: |
+          # 1. Desempaquetar de forma ligera (sin tocar el código fuente)
+          java -jar apktool.jar d base.apk -o decoded -s
           
+          # 2. Renombrar la aplicación a Mikoto Nikki
+          find decoded/res -name "strings.xml" -exec sed -i 's/EasyRPG Player/Mikoto Nikki/g' {} +
+          
+          # 3. Re-empaquetar el cascarón con el nuevo nombre
+          java -jar apktool.jar b decoded -o shell.apk
+          
+          # 4. Preparar tus archivos del juego
+          GAME_DIR=$(dirname $(find . -iname "rpg_rt.ldb" | head -n 1))
+          mkdir -p inject/assets
+          cp -r "$GAME_DIR"/* inject/assets/
+          
+          # 5. EL TRUCO: Inyectar los assets al APK con nivel de compresión 0 (-0)
+          cd inject
+          zip -r0 ../shell.apk assets/
+          cd ..
+          
+          # 6. Sellar y firmar el APK listo para instalar
+          java -jar signer.jar -a shell.apk -o final_apk
+
       - name: Subir tu juego listo
         uses: actions/upload-artifact@v4
         with:
           name: Mikoto-Nikki-Standalone
-          path: builds/android/app/build/outputs/apk/debug/*.apk
+          path: final_apk/*.apk
