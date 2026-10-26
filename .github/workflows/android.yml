@@ -17,12 +17,23 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Preparar herramientas
+      - name: Preparar herramientas y APK Base
         run: |
           wget https://bitbucket.org/iBotPeaches/apktool/downloads/apktool_2.9.3.jar -O apktool.jar
           wget https://github.com/patrickfav/uber-apk-signer/releases/download/v1.3.0/uber-apk-signer-1.3.0.jar -O signer.jar
-          APK_URL=$(curl -s https://api.github.com/repos/EasyRPG/Player/releases | grep browser_download_url | grep -i "\.apk" | head -n 1 | cut -d '"' -f 4)
-          wget "$APK_URL" -O base.apk
+          
+          if [ -f "base.apk" ]; then
+            echo "Usando el archivo base.apk subido manualmente por el usuario..."
+          else
+            echo "Descargando el APK oficial usando el Token de GitHub..."
+            APK_URL=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" https://api.github.com/repos/EasyRPG/Player/releases | grep browser_download_url | grep -i "\.apk" | head -n 1 | cut -d '"' -f 4)
+            
+            if [ -z "$APK_URL" ]; then
+              echo "Error: EasyRPG ya no tiene APKs adjuntos en sus releases de GitHub."
+              exit 1
+            fi
+            wget "$APK_URL" -O base.apk
+          fi
 
       - name: Inyectar el juego en el APK
         run: |
